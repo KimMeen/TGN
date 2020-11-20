@@ -26,10 +26,10 @@ class MLPMessageFunction(MessageFunction):
   INPUT:
       raw_message_dimension: Dimension of the raw_message
       message_dimension: Dimension of the message
-      raw_messages: [S(t-1) || e(t)] for interaction events
+      raw_messages: [S_i(t-1) || S_j(t-1) || delta_t || e(t)] for interaction events
       
   OUTPUT:
-      message: m(t) <-- {S(t-1), e(t)} for interation events
+      message: m(t) <-- [S_i(t-1) || S_j(t-1) || delta_t || e(t)] for interation events
   
   """
   def __init__(self, raw_message_dimension, message_dimension):

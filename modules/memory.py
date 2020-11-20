@@ -7,9 +7,7 @@ Created on Mon Aug 24 17:56:38 2020
 
 import torch
 from torch import nn
-
 from collections import defaultdict
-from copy import deepcopy
 
 
 class Memory(nn.Module):
@@ -114,8 +112,3 @@ class Memory(nn.Module):
     """
     for node in nodes:
       self.messages[node] = []
-      
-   # def prune_message(self, keep_latest):
-   #     for key, value in self.messages.items():
-   #       if len(value) > keep_latest:
-   #           self.messages[key] = value[-keep_latest:]

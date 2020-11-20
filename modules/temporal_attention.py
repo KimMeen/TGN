@@ -14,12 +14,11 @@ from utils.utils import MergeLayer
 class TemporalAttentionLayer(torch.nn.Module):
   """
   Temporal attention layer. Return the temporal embedding of a node given the node itself,
-   its neighbors and the edge timestamps.
+  its neighbors and the edge timestamps.
   """
 
   def __init__(self, n_node_features, n_neighbors_features, n_edge_features, time_dim,
-               output_dimension, n_head=2,
-               dropout=0.1):
+               output_dimension, n_head=2, dropout=0.1):
     super(TemporalAttentionLayer, self).__init__()
 
     self.n_head = n_head
@@ -41,7 +40,7 @@ class TemporalAttentionLayer(torch.nn.Module):
   def forward(self, src_node_features, src_time_features, neighbors_features,
               neighbors_time_features, edge_features, neighbors_padding_mask):
     """
-    "Temporal attention model
+    Temporal attention model
     :param src_node_features: float Tensor of shape [batch_size, n_node_features]
     :param src_time_features: float Tensor of shape [batch_size, 1, time_dim]
     :param neighbors_features: float Tensor of shape [batch_size, n_neighbors, n_node_features]

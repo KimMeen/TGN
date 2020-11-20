@@ -24,16 +24,16 @@ class MessageAggregator(torch.nn.Module):
       Aggregate functions to be implemented
       """
       
-  def group_by_id(self, node_ids, messages, timestamps):
-    """
-    NOT HAS BEEN USED
-    """
-    node_id_to_messages = defaultdict(list)
+  # def group_by_id(self, node_ids, messages, timestamps):
+  #   """
+  #   NOT HAS BEEN USED
+  #   """
+  #   node_id_to_messages = defaultdict(list)
 
-    for i, node_id in enumerate(node_ids):
-      node_id_to_messages[node_id].append((messages[i], timestamps[i]))
+  #   for i, node_id in enumerate(node_ids):
+  #     node_id_to_messages[node_id].append((messages[i], timestamps[i]))
 
-    return node_id_to_messages
+  #   return node_id_to_messages
 
 
 class LastMessageAggregator(MessageAggregator):
@@ -42,7 +42,7 @@ class LastMessageAggregator(MessageAggregator):
 
   def aggregate(self, node_ids, messages):
     """
-    Given a list of node ids in a batch and associated messages m_i(t_j), aggregate different
+    Given a list of node ids in a batch and associated messages m_i(t), aggregate different
     messages for the same id using the lastest message.
     
     

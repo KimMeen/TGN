@@ -16,7 +16,7 @@ class NeighborFinder:
   """
   INIT INPUTS:
      adj_list: A list of shape [max_node_idx, 1] in this format: [[src_node/dest_node, edge_idx to dest_node/src_node, timestamp]]
-     uniform: Bool, if Ture then randomly sample n_neighbors before the cut_time
+     uniform: Bool, if Ture then we randomly sample n_neighbors before the cut_time
      seed: random seed for
   """
   def __init__(self, adj_list, uniform=False, seed=None):
@@ -53,8 +53,8 @@ class NeighborFinder:
 
   def get_temporal_neighbor(self, source_nodes, timestamps, n_neighbors=20):
     """
-    Given a list source_nodes and correspond cut times (i.e. their timestamps),
-    this method extracts a sampled temporal neighborhood of each node in the source_nodes.
+    Given a list source_nodes and correspond cut times (i.e. their current timestamps),
+    this method extracts a list of sampled temporal neighbors of each node in source_nodes.
     
     INPUTS:
         source_nodes: A list (int) of nodes which temporal neighbors need to be extracted
@@ -115,9 +115,9 @@ class NeighborFinder:
     return neighbors, edge_idxs, edge_times
 
 
-def get_neighbor_finder(data, uniform):
+def get_neighbor_finder(data, uniform, max_node_idx=None):
     
-  max_node_idx = max(data.sources.max(), data.destinations.max())
+  max_node_idx = max(data.sources.max(), data.destinations.max()) if max_node_idx is None else max_node_idx
   adj_list = [[] for _ in range(max_node_idx + 1)]
   for source, destination, edge_idx, timestamp in zip(data.sources, data.destinations,
                                                       data.edge_idxs,

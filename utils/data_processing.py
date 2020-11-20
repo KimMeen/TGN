@@ -34,8 +34,8 @@ def get_data(dataset_name, different_new_nodes_between_val_and_test=False):
         node_features: Array of shape [n_nodes, node_feat_dim], node_feat_dim is fixed to 172
         edge_features: Array of shape [n_interactions, edge_feat_dim]
         full_data: Data instance; It contains interactions of the whole temporal graph (i.e. acrossing the entire timespan)
-        train_data: Data instance; It contains interactions happening before the validation time which do not involve any new node used for inductiveness
-        val_data:  Data instance; It contains interactions after training time but before the testing time, this setting may contain nodes in train_data (transductive setting)  
+        train_data: Data instance; It contains interactions happening before the validation time which not contains unseen nodes for testing inductiveness
+        val_data:  Data instance; It contains interactions after training time but before the testing time. This setting may contain nodes in train_data (transductive setting)  
         test_data: Similar to val_data, this setting may contain nodes in train_data (transductive setting)
         new_node_val_data: Inductive val_data with edges that at least have one unseen node (inductive setting)
         new_node_test_data: Inductive test_data with edges that at least have one unseen node (inductive setting)
@@ -61,10 +61,10 @@ def get_data(dataset_name, different_new_nodes_between_val_and_test=False):
     
     random.seed(2020)
     
-    node_set = set(sources) | set(destinations)  # set of all nodes (no duplications)
-    n_total_unique_nodes = len(node_set)  # notice: set() will remove duplications
+    node_set = set(sources) | set(destinations)  # a set of all nodes (no duplications)
+    n_total_unique_nodes = len(node_set)         # notice: set() will remove duplications
     
-    # Compute nodes which appear at val & test time
+    # get nodes which appear at val & test time
     test_node_set = set(sources[timestamps > val_time]).union(set(destinations[timestamps > val_time]))
     
     # Sample (10% * n_nodes) nodes from val & test nodes to be unseen nodes
@@ -78,7 +78,7 @@ def get_data(dataset_name, different_new_nodes_between_val_and_test=False):
     # A list of length n_interaction where True for element (i.e. interaction) if both src_node and dest_node are not unseen nodes
     observed_edges_mask = np.logical_and(~new_test_source_mask, ~new_test_destination_mask)
     
-    # For train we keep edges happening before the validation time && do not involve any unseen node
+    # For train we keep edges happening before the validation time and not involve any unseen node
     train_mask = np.logical_and(timestamps <= val_time, observed_edges_mask)
     train_data = Data(sources[train_mask], destinations[train_mask], timestamps[train_mask], edge_idxs[train_mask], labels[train_mask])
     
@@ -100,12 +100,9 @@ def get_data(dataset_name, different_new_nodes_between_val_and_test=False):
     # val and test mask where we don't consider unseen nodes issue
     val_mask = np.logical_and(timestamps <= test_time, timestamps > val_time)
     test_mask = timestamps > test_time
-    
-    # validation and test with all edges
-    val_data = Data(sources[val_mask], destinations[val_mask], timestamps[val_mask], edge_idxs[val_mask], labels[val_mask])
-    test_data = Data(sources[test_mask], destinations[test_mask], timestamps[test_mask], edge_idxs[test_mask], labels[test_mask])
-    
+       
     if different_new_nodes_between_val_and_test:
+        # val and test set will contain different unseen nodes
         n_new_nodes = len(new_test_node_set) // 2
         val_new_node_set = set(list(new_test_node_set)[:n_new_nodes])
         test_new_node_set = set(list(new_test_node_set)[n_new_nodes:])
@@ -116,10 +113,14 @@ def get_data(dataset_name, different_new_nodes_between_val_and_test=False):
         new_node_test_mask = np.logical_and(test_mask, edge_contains_new_test_node_mask)
     
     else:
-        # one of each (src or dest) contains unseen nodes then True
+        # val and test set may contain same unseen nodes
         edge_contains_new_node_mask = np.array([(a in new_node_set or b in new_node_set) for a, b in zip(sources, destinations)])
         new_node_val_mask = np.logical_and(val_mask, edge_contains_new_node_mask)
         new_node_test_mask = np.logical_and(test_mask, edge_contains_new_node_mask)
+
+    # validation and test with all edges
+    val_data = Data(sources[val_mask], destinations[val_mask], timestamps[val_mask], edge_idxs[val_mask], labels[val_mask])
+    test_data = Data(sources[test_mask], destinations[test_mask], timestamps[test_mask], edge_idxs[test_mask], labels[test_mask])
     
     # validation and test with edges that at least has one new node (not in training set)
     new_node_val_data = Data(sources[new_node_val_mask], destinations[new_node_val_mask], 
@@ -142,7 +143,6 @@ def get_data(dataset_name, different_new_nodes_between_val_and_test=False):
 
 
 def compute_time_statistics(sources, destinations, timestamps):
-    
     last_timestamp_sources = dict()
     last_timestamp_dst = dict()
     all_timediffs_src = []
@@ -165,5 +165,4 @@ def compute_time_statistics(sources, destinations, timestamps):
     std_time_shift_src = np.std(all_timediffs_src)
     mean_time_shift_dst = np.mean(all_timediffs_dst)
     std_time_shift_dst = np.std(all_timediffs_dst)
-    
     return mean_time_shift_src, std_time_shift_src, mean_time_shift_dst, std_time_shift_dst

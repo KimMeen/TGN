@@ -27,7 +27,7 @@ def preprocess(data_name):
     
     with open(data_name) as f:
         
-        s = next(f)
+        # s = next(f)
         
         for idx, line in enumerate(f):
             e = line.strip().split(',')
@@ -122,11 +122,11 @@ def run(data_name, bipartite=True):
   feat = np.vstack([empty, feat])  # with shape [interactions, feat_dim]
 
   max_idx = max(new_df.u.max(), new_df.i.max())  # number of nodes
-  rand_feat = np.zeros((max_idx + 1, 172))  # initialize node features with fixed 172 dimension size
+  rand_feat = np.zeros((max_idx + 1, 172))  # initialize node features with fixed 172 dimension size for datasets without dynamic node features
 
   new_df.to_csv(OUT_DF)  # temporal bipartite interaction graph
-  np.save(OUT_FEAT, feat)  # initial node features
-  np.save(OUT_NODE_FEAT, rand_feat)  # interaction (i.e. Temporal edge) features
+  np.save(OUT_FEAT, feat)  # interaction (i.e. Temporal edge) features
+  np.save(OUT_NODE_FEAT, rand_feat)  # initial node features
 
 ### Entry
 parser = argparse.ArgumentParser('Interface for TGN data preprocessing')

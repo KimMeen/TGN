@@ -4,7 +4,7 @@ Created on Fri Aug 28 16:31:51 2020
 
 @author: Ming Jin
 
-TGN for link prediction
+TGN - Self-supervised link prediction
 """
 
 import math
@@ -27,29 +27,36 @@ np.random.seed(0)
 
 ### Argument and global variables
 parser = argparse.ArgumentParser('TGN self-supervised training')
-parser.add_argument('-d', '--data', type=str, help='Dataset name (eg. wikipedia or reddit)', default='wikipedia')
-parser.add_argument('--batch', type=int, default=200, help='Batch_size')
+
+parser.add_argument('--data', type=str, help='Dataset name (eg. wikipedia or reddit)', default='wikipedia')
+parser.add_argument('--different_new_nodes', action='store_true', help='Whether val and test set use different unseen nodes (to test inductiveness)')
 parser.add_argument('--prefix', type=str, default='', help='Prefix to name the checkpoints')
-parser.add_argument('--neighbors', type=int, default=10, help='Number of neighbors to sample')
-parser.add_argument('--n_head', type=int, default=2, help='Number of heads used in attention layer')
+parser.add_argument('--batch', type=int, default=200, help='Batch_size')
 parser.add_argument('--n_epoch', type=int, default=50, help='Number of epochs')
-parser.add_argument('--n_layer', type=int, default=1, help='Number of network layers')
 parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
-parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
-parser.add_argument('--n_runs', type=int, default=1, help='Number of runs for this script')
 parser.add_argument('--drop_out', type=float, default=0.1, help='Dropout probability')
-parser.add_argument('--gpu', type=int, default=0, help='Idx for the gpu to use')
+parser.add_argument('--n_runs', type=int, default=1, help='Number of runs for this script')
 parser.add_argument('--backprop_every', type=int, default=1, help='Every how many batches to backprop')
+parser.add_argument('--gpu', type=int, default=0, help='Idx for the gpu to use')
+parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
+
 parser.add_argument('--use_memory', action='store_true', help='Whether to augment the model with a node memory')
+parser.add_argument('--memory_update_at_end', action='store_true', help='Whether to update memory at the end or at the start of the batch')    
+parser.add_argument('--node_dim', type=int, default=100, help='Dimensions of the node embedding')
+parser.add_argument('--time_dim', type=int, default=100, help='Dimensions of the time embedding')   
+parser.add_argument('--message_dim', type=int, default=100, help='Dimensions of the messages')
+parser.add_argument('--memory_dim', type=int, default=172, help='Dimensions of the memory for each node')
+parser.add_argument('--neighbors', type=int, default=10, help='Number of neighbors to sample')
+parser.add_argument('--uniform', action='store_true', help='take uniform sampling from temporal neighbors')
 parser.add_argument('--embedding_module', type=str, default="graph_attention", choices=["graph_attention", "graph_sum", "identity", "time"], help='Type of embedding module')
 parser.add_argument('--message_function', type=str, default="identity", choices=["mlp", "identity"], help='Type of message function')
 parser.add_argument('--aggregator', type=str, default="last", choices=["last", "mean"], help='Type of message aggregator')
-parser.add_argument('--memory_update_at_start', action='store_true', help='Whether to update memory at start of the batch')
-parser.add_argument('--message_dim', type=int, default=100, help='Dimensions of the messages')
-parser.add_argument('--memory_dim', type=int, default=172, help='Dimensions of the memory for each node')
-parser.add_argument('--different_new_nodes', action='store_true', help='Whether val and test set use different unseen nodes (to test inductiveness)')
-parser.add_argument('--uniform', action='store_true', help='take random sampling from temporal neighbors')
-         
+parser.add_argument('--memory_updater', type=str, default="gru", choices=["gru", "rnn"], help='Type of memory updater')
+parser.add_argument('--n_layer', type=int, default=1, help='Number of network layers')
+parser.add_argument('--n_head', type=int, default=2, help='Number of heads used in attention layer')
+parser.add_argument('--use_source_embedding_in_message', action='store_true', help='Whether to use the embedding of the source node as part of the message')
+parser.add_argument('--use_destination_embedding_in_message', action='store_true', help='Whether to use the embedding of the destination node as part of the message')
+
 try:
   args = parser.parse_args()
 except:
@@ -63,20 +70,19 @@ NUM_EPOCH = args.n_epoch
 NUM_HEADS = args.n_head
 DROP_OUT = args.drop_out
 GPU = args.gpu
-SEQ_LEN = NUM_NEIGHBORS
 DATA = args.data
 NUM_LAYER = args.n_layer
 LEARNING_RATE = args.lr
+NODE_DIM = args.node_dim  # Notice: node_dim=172 for dataset without node features
+TIME_DIM = args.time_dim
 USE_MEMORY = args.use_memory
 MESSAGE_DIM = args.message_dim
 MEMORY_DIM = args.memory_dim
 
 Path("./saved_models/").mkdir(parents=True, exist_ok=True)
 Path("./saved_checkpoints/").mkdir(parents=True, exist_ok=True)
-
 MODEL_SAVE_PATH = f'./saved_models/{args.prefix}-{args.data}.pth'
-get_checkpoint_path = lambda \
-    epoch: f'./saved_checkpoints/{args.prefix}-{args.data}-{epoch}.pth'
+get_checkpoint_path = lambda epoch: f'./saved_checkpoints/{args.prefix}-{args.data}-{epoch}.pth'
 
 ### set up logger
 logging.basicConfig(level=logging.INFO)
@@ -133,12 +139,16 @@ for i in range(args.n_runs):
               n_layers=NUM_LAYER,
               n_heads=NUM_HEADS, dropout=DROP_OUT, use_memory=USE_MEMORY,
               message_dimension=MESSAGE_DIM, memory_dimension=MEMORY_DIM,
-              memory_update_at_start=args.memory_update_at_start,
+              memory_update_at_start=not args.memory_update_at_end,
               embedding_module_type=args.embedding_module,
               message_function=args.message_function,
-              aggregator_type=args.aggregator, n_neighbors=NUM_NEIGHBORS,
+              aggregator_type=args.aggregator,
+              memory_updater_type=args.memory_updater,
+              n_neighbors=NUM_NEIGHBORS,
               mean_time_shift_src=mean_time_shift_src, std_time_shift_src=std_time_shift_src,
-              mean_time_shift_dst=mean_time_shift_dst, std_time_shift_dst=std_time_shift_dst)
+              mean_time_shift_dst=mean_time_shift_dst, std_time_shift_dst=std_time_shift_dst,
+              use_destination_embedding_in_message=args.use_destination_embedding_in_message,
+              use_source_embedding_in_message=args.use_source_embedding_in_message)
     
     criterion = torch.nn.BCELoss()
     optimizer = torch.optim.Adam(tgn.parameters(), lr=LEARNING_RATE)
@@ -221,7 +231,7 @@ for i in range(args.n_runs):
             m_loss.append(loss.item())
         
             ### Detach memory after 'args.backprop_every' number of batches so we don't backpropagate to the start of time
-            # If we don't do this, the "Trying backpropagate but buffers haven been freed" issue will occur because:
+            # TODO: If not, "Trying backpropagate but buffers have not been freed" error will happen because:
             # 1). For mem_update_at_end: Memory updated at the end may contain this batch information that loss will not cover,
             #     so we have to detach to ensure the memory has the information that loss has covered to backpropagate.
             # 2). For mem_update_at_start: We don't have the issue on (1) but some node messages may be removed after update_memory
@@ -251,11 +261,11 @@ for i in range(args.n_runs):
             tgn.memory.restore_memory(train_memory_backup)
       
         # Validate on unseen nodes
-        nn_val_ap, nn_val_auc = eval_edge_prediction(model=tgn, negative_edge_sampler=val_rand_sampler, 
+        nn_val_ap, nn_val_auc = eval_edge_prediction(model=tgn, negative_edge_sampler=nn_val_rand_sampler,
                                                      data=new_node_val_data, n_neighbors=NUM_NEIGHBORS)
       
         if USE_MEMORY:
-            # Restore memory we had at the end of validation to get ready testing if:
+            # Restore memory we had at the end of validation to get ready for testing if:
             # 1). This is last epoch
             # 2). Early stopping happen on this epoch
             tgn.memory.restore_memory(val_memory_backup)
@@ -278,10 +288,8 @@ for i in range(args.n_runs):
       
         logger.info('epoch: {} took {:.2f}s'.format(epoch, total_epoch_time))
         logger.info('Epoch mean loss: {}'.format(np.mean(m_loss)))
-        logger.info(
-          'transductive val auc: {}, inductive val auc: {}'.format(val_auc, nn_val_auc))
-        logger.info(
-          'transductive val ap: {}, inductive val ap: {}'.format(val_ap, nn_val_ap))
+        logger.info('transductive val auc: {}, inductive val auc: {}'.format(val_auc, nn_val_auc))
+        logger.info('transductive val ap: {}, inductive val ap: {}'.format(val_ap, nn_val_ap))
       
         # Early stopping
         if early_stopper.early_stop_check(val_ap):

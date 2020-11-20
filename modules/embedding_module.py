@@ -21,7 +21,7 @@ class EmbeddingModule(nn.Module):
   """
   Abstract class for the embedding calculation
   
-  INIT INPUTS:
+  INIT:
       node_features: Nodes raw features of shape [n_nodes, node_feat_dim]
       edge_features: Edges raw features of shape [n_interactinon, edge_feat_dim]
       neighbor_finder: NeighborFinder instance
@@ -101,7 +101,7 @@ class TimeEmbedding(EmbeddingModule):
         if self.bias is not None:
           self.bias.data.normal_(0, stdv)
 
-    self.embedding_layer = NormalLinear(1, self.n_node_features)  # TODO: Solved, emb_dim = n_node_features
+    self.embedding_layer = NormalLinear(1, self.n_node_features)  # node_dim = 172 = mem_dim for wiki and reddit
 
   def compute_embedding(self, memory, source_nodes, timestamps, n_layers, n_neighbors=20, time_diffs=None,
                         use_time_proj=True):
@@ -113,7 +113,7 @@ class TimeEmbedding(EmbeddingModule):
 
 class GraphEmbedding(EmbeddingModule):
   """
-  THe second abstract class (EmbeddingModule <-- GraphEmbedding <-- GraphSumEmbedding/GraphAttentionEmbedding)
+  THe second abstract class (Relationship: EmbeddingModule <-- GraphEmbedding <-- GraphSumEmbedding/GraphAttentionEmbedding)
   for the graph-based embedding calculation
   """
   def __init__(self, node_features, edge_features, neighbor_finder, time_encoder, n_layers,
@@ -122,9 +122,9 @@ class GraphEmbedding(EmbeddingModule):
       
       
       super(GraphEmbedding, self).__init__(node_features, edge_features,
-                                         neighbor_finder, time_encoder, n_layers,
-                                         n_node_features, n_edge_features, n_time_features,
-                                         embedding_dimension, device, dropout)
+                                           neighbor_finder, time_encoder, n_layers,
+                                           n_node_features, n_edge_features, n_time_features,
+                                           embedding_dimension, device, dropout)
 
       self.use_memory = use_memory
       self.device = device
@@ -139,7 +139,7 @@ class GraphEmbedding(EmbeddingModule):
         same as EmbeddingModule
         
     OUTPUT:
-        source_node_features: h^0 (t) of shape [source_nodes, node_feat_dim]
+        source_node_features (if n_layer==0): h^0 (t) of shape [source_nodes, node_feat_dim]
         OR
         source_embedding: h^1 (t) to h^n_layers (t), each of shape [source_nodes, emb_dim]
     """
@@ -153,12 +153,11 @@ class GraphEmbedding(EmbeddingModule):
 
     # h^0 (t) = S(t) + V(t)
     if self.use_memory:
-      source_node_features = memory[source_nodes, :] + source_node_features  # TODO: solved, emd_dim = node_feat_dim
+      source_node_features = memory[source_nodes, :] + source_node_features  # node_dim = 172 = mem_dim for wiki and reddit
 
     if n_layers == 0:
       # h^0 (t)  
       return source_node_features
-  
     else:
       # n_neighbors TEMPORAL neighbors of source_nodes, as well as the corrsponding edges and associated interaction timestamps
       # neighbors: Arrary of shape [source_nodes, n_neighbors]
@@ -172,7 +171,7 @@ class GraphEmbedding(EmbeddingModule):
       edge_deltas = timestamps[:, np.newaxis] - edge_times  # This is t - t_N in the paper of shape [source_nodes, num_temp_neighbors]
       edge_deltas_torch = torch.from_numpy(edge_deltas).float().to(self.device)
 
-      # Recrsively calculate the embeddings L-hops neighbors of source_nodes
+      # Recrsively calculate L-hops neighbors' embeddings of source_nodes
       neighbors = neighbors.flatten()  # [source_nodes * num_temp_neighbors]
       # neighbor_embeddings of shape [len(neighbors), emb_dim]
       neighbor_embeddings = self.compute_embedding(memory,
@@ -215,7 +214,7 @@ class GraphEmbedding(EmbeddingModule):
           neighbor_embeddings: Neighbor embeddings of l-1 layer with shape [source_nodes, emb_dim]
           edge_time_embeddings: Phi(t - t_j) of shape [source_nodes, n_time_features]
           edge_features: e_ij (i.e. edge_features) of shape [source_nodes, n_neighbors, n_edge_features = node_feat_dim]
-          mask: A zeros tensor of shape [source_nodes, n_neighbors]
+          mask: A zeros tensor of shape [source_nodes, n_neighbors]; Has been used by Graph Attn Module
       """
       return None
 
@@ -252,7 +251,7 @@ class GraphSumEmbedding(GraphEmbedding):
     neighbors_features = torch.cat([neighbor_embeddings, edge_time_embeddings, edge_features], dim=2)
     neighbor_embeddings = self.linear_1[n_layer - 1](neighbors_features)
     # h^wave_i (t) in paper
-    neighbors_sum = torch.sum(neighbor_embeddings, dim=1)
+    neighbors_sum = torch.nn.functional.relu(torch.sum(neighbor_embeddings, dim=1))
     
     # source_features: [source_nodes, n_node_features + n_time_features]
     source_features = torch.cat([source_node_features, source_nodes_time_embedding.squeeze()], dim=1)  # TODO: Why raw features?
